@@ -12,4 +12,4 @@
 000001000
 ```
 2. Save it.
-3. Run **sudoku.py** and follow the tips.
+3. Run sudoku.py and follow the tips.
