@@ -128,15 +128,17 @@ class Sudoku:
             candidate = []
             for v in range(1, 10):
                 candidate.append((_i, _j, v))
+            
         if randomly:
             return random.choice(candidate)
         else:
             _i, _j, _v, _n = 9, 9, 0, 0
             for i, j, v in candidate:
                 _neighbour = self.neighbour(i, j, v)
-                if _n is 0 or len(_neighbour) < _n:
+                if _n is 0 or len(_neighbour) > _n:
                     _i, _j, _v, _n = i, j, v, len(_neighbour)
-
+                elif len(_neighbour) == _n and random.choice((False, True)):
+                    _i, _j, _v = i, j, v
         return _i, _j, _v
 
     def initialize_(self, *, show=False):
@@ -184,54 +186,54 @@ class Sudoku:
             print('simplied SODUKU:', self, sep='\n')
             print('CHOICES:', self.choice_(), sep='\n')
 
-    def solve(self, *, guess: List[Tuple]=(), failure: Tuple[int, int]=(), randomly, show):
-        if not self.initialized:
-            if self.islegal:
-                self.initialize_(show=show)
-            else:
+    def solve(self, *, randomly, show):
+        guess: List[Tuple] = []
+        failure: Tuple[int, int] = ()
+        count: int = 0
+        while True:
+            if not self.initialized:
+                if self.islegal:
+                    self.initialize_(show=show)
+                else:
+                    raise SudokuIsIllegal
+                self.initialized = True
+            self.simplfy(show=show)
+
+            if self.iscompleted:
+                print('  ' * (len(guess) - 1), 'completed: ', count, sep='')
+                raise SudokuIsCompleted
+
+            elif self.islegal:
+                if not self.confirmed:
+                    print('CONFIRMED:', self, sep='\n')
+                    self.confirmed = True
+                # guess
+                bestchoice = self.makechoice(randomly=randomly, failure=failure, show=show)
+                backup = copy.deepcopy((self.table, self.flag, self.choice))
+                guess.append((backup, *bestchoice))
+                print('> ' * (len(guess) - 1), 'guess: ', bestchoice, sep='')
+                count += 1
+                if show:
+                    print()
+                self.set_(*bestchoice, show=show)
+
+            elif len(guess) is 0:
+                print('illegal!')
                 raise SudokuIsIllegal
-            self.initialized = True
-        self.simplfy(show=show)
 
-        if self.iscompleted:
-            print('  ' * (len(guess) - 1), 'completed!', sep='')
-            raise SudokuIsCompleted
-
-        elif self.islegal:
-            if not self.confirmed:
-                print('CONFIRMED:', self, sep='\n')
-                self.confirmed = True
-            # guess
-            bestchoice = self.makechoice(randomly=randomly, failure=failure, show=show)
-            if guess is ():
-                guess = []
-            backup = copy.deepcopy((self.table, self.flag, self.choice))
-            guess.append((backup, *bestchoice))
-            print('> ' * (len(guess) - 1), 'guess: ', bestchoice, sep='')
-            if show:
-                print()
-            self.set_(*bestchoice, show=show)
-            return self.solve(guess=guess, randomly=randomly, show=show)
-
-        elif guess is ():
-            print('illegal!')
-            raise SudokuIsIllegal
-
-        else:
-            print('  ' * (len(guess) - 2) + '< ', 'wrong: ', guess[-1][1:], sep='')
-            [backup, wrongi, wrongj, wrongv] = guess[-1]
-            del guess[-1]
-            if len(guess) is 0:
-                guess = ()
-            self.table, self.flag, self.choice = copy.deepcopy(backup)
-            self.choice[wrongi][wrongj][wrongv] = 0
-            self.choice[wrongi][wrongj][0] -= 1
-            if show:
-                print('BACKUP:')
-                print(self)
-                # print('FLAGS:', self.flag_, sep='\n')
-                print('CHOICES:', self.choice_(), sep='\n')
-            return self.solve(guess=guess, failure=(wrongi, wrongj), randomly=randomly, show=show)
+            else:
+                print('  ' * (len(guess) - 2) + '< ', 'wrong: ', guess[-1][1:], sep='')
+                [backup, wrongi, wrongj, wrongv] = guess[-1]
+                del guess[-1]
+                self.table, self.flag, self.choice = copy.deepcopy(backup)
+                self.choice[wrongi][wrongj][wrongv] = 0
+                self.choice[wrongi][wrongj][0] -= 1
+                if show:
+                    print('BACKUP:')
+                    print(self)
+                    # print('FLAGS:', self.flag_, sep='\n')
+                    print('CHOICES:', self.choice_(), sep='\n')
+                    failure = (wrongi, wrongj)
 
     def __str__(self) -> str:
         _str: str = ''
@@ -245,7 +247,7 @@ class Sudoku:
             _str += '\n'
         # _str = _str[:-1]
         return _str
-    
+
     def choice_(self, *, detail=False) -> str:
         _str: str = ''
         for i in range(9):
@@ -378,7 +380,7 @@ def main(*, _in: str = '', _out: str = '', randomly=False, show=False):
 
 
 if __name__ == '__main__':
-    code = 4
-    randomly = False
+    code = 2
+    randomly = True
     show = False
     main(_in='sudoku.in%d.txt' % code, randomly=randomly, show=show)
