@@ -7,7 +7,6 @@ import copy
 import codecs
 import random
 
-
 Matrix = List[List[Any]]
 Points = Set[Tuple[int, int]]
 
@@ -15,39 +14,41 @@ Points = Set[Tuple[int, int]]
 class Sudoku:
     map = {'r': 'Row', 'c': 'Column', 'b': 'Box'}
 
-    def __init__(self, *, name: str = '', table: Matrix = (), box: Matrix = ()):
+    def __init__(self, *, size: int=9, selection: str='', name: str='', table: Matrix=(), box: Matrix=()):
+        self.size = size
         self.name = name
-        self.table: Matrix = [[0] * 9 for _ in range(9)]
-        self.box: Matrix = [[0, 0, 0, 1, 1, 1, 2, 2, 2],
-                            [0, 0, 0, 1, 1, 1, 2, 2, 2],
-                            [0, 0, 0, 1, 1, 1, 2, 2, 2],
-                            [3, 3, 3, 4, 4, 4, 5, 5, 5],
-                            [3, 3, 3, 4, 4, 4, 5, 5, 5],
-                            [3, 3, 3, 4, 4, 4, 5, 5, 5],
-                            [6, 6, 6, 7, 7, 7, 8, 8, 8],
-                            [6, 6, 6, 7, 7, 7, 8, 8, 8],
-                            [6, 6, 6, 7, 7, 7, 8, 8, 8]]
+        self.selection = selection
+        self.table: Matrix = [[0] * self.size for _ in range(self.size)]
+        self.box: Matrix = [[0] * self.size for _ in range(self.size)]
+        s = int(self.size ** 0.5)
+        for i in range(self.size):
+            for j in range(self.size):
+                self.box[i][j] = i // s * s + j // s
         self.flag: Dict[str, Matrix] = {}
         for index in Sudoku.map:
-            self.flag[index] = [None] * 9
-            for i in range(9):
-                self.flag[index][i] = [0] * 10
+            self.flag[index] = [None] * self.size
+            for i in range(self.size):
+                self.flag[index][i] = [0] * len(self.selection)
         self.choice: Matrix = ()
         self.initialized = False
         self.confirmed = False
 
         if table is not ():
-            if ismatrix(table):
-                for i in range(9):
-                    for j in range(9):
+            if self.ismatrix(table):
+                for i in range(self.size):
+                    for j in range(self.size):
                         self.set_(i, j, table[i][j])
             else:
+                for line in table:
+                    print(line)
                 raise ValueError
 
         if box is not ():
-            if ismatrix(box):
+            if self.ismatrix(box):
                 self.box = box
             else:
+                for line in box:
+                    print(line)
                 raise ValueError
 
     def __getitem__(self, sequence) -> List:
@@ -75,22 +76,22 @@ class Sudoku:
                 for _i, _j in self.neighbour(i, j, v):
                     self.choice[_i][_j][0] -= 1
                     self.choice[_i][_j][v] = 0
-                self.choice[i][j] = [0] * 10
+                self.choice[i][j] = [0] * len(self.selection)
         if show:
-            print('(%s, %s) = %s' % (i, j, v))
+            print('(%s, %s) = %s' % (i, j, self.selection[v]))
             print(self)
 
-    def neighbour(self, i: int, j: int, v: int=0) -> Points:
+    def neighbour(self, i: int, j: int, v: int = 0) -> Points:
         _neighbour: Points = set()
-        for _i in range(9):
+        for _i in range(self.size):
             if not v or self.choice[_i][j][v]:
                 _neighbour.add((_i, j))
-        for _j in range(9):
+        for _j in range(self.size):
             if not v or self.choice[i][_j][v]:
                 _neighbour.add((i, _j))
         b = self.box[i][j]
-        for _i in range(9):
-            for _j in range(9):
+        for _i in range(self.size):
+            for _j in range(self.size):
                 if self.box[_i][_j] is b:
                     if not v or self.choice[_i][_j][v]:
                         _neighbour.add((_i, _j))
@@ -101,15 +102,15 @@ class Sudoku:
         qualified = 1
         while len(candidate) is 0:
             qualified += 1
-            for i in range(9):
-                for j in range(9):
+            for i in range(self.size):
+                for j in range(self.size):
                     if self.choice[i][j][0] is qualified:
-                        for v in range(1, 10):
+                        for v in range(1, len(self.selection)):
                             if self.choice[i][j][v]:
                                 candidate.append((i, j, v))
         if show:
             print('standard:', qualified)
-            print('among:',)
+            print('among:', )
             site: Dict[Tuple[int, int], List[int]] = {}
             for i, j, v in candidate:
                 if (i, j) not in site:
@@ -117,8 +118,8 @@ class Sudoku:
                 site[(i, j)].append(v)
             for _site in site:
                 print(_site, ':', end=' ')
-                for _candidate in site[_site]:
-                    print(_candidate, end=' ')
+                for _v in site[_site]:
+                    print(self.selection[_v], end=' ')
                 print()
 
         if failure is not () and self.choice[failure[0]][failure[1]][0] > 1:
@@ -126,13 +127,13 @@ class Sudoku:
             _i, _j = failure
             print('failure: (%d, %d)' % (_i, _j))
             candidate = []
-            for v in range(1, 10):
+            for v in range(1, len(self.selection)):
                 candidate.append((_i, _j, v))
-            
+
         if randomly:
             return random.choice(candidate)
         else:
-            _i, _j, _v, _n = 9, 9, 0, 0
+            _i, _j, _v, _n = self.size, self.size, 0, 0
             for i, j, v in candidate:
                 _neighbour = self.neighbour(i, j, v)
                 if _n is 0 or len(_neighbour) > _n:
@@ -142,16 +143,16 @@ class Sudoku:
         return _i, _j, _v
 
     def initialize_(self, *, show=False):
-        self.choice = [[None] * 9 for _ in range(9)]
-        for i in range(9):
-            for j in range(9):
-                self.choice[i][j] = [0] * 10
+        self.choice = [[None] * self.size for _ in range(self.size)]
+        for i in range(self.size):
+            for j in range(self.size):
+                self.choice[i][j] = [0] * len(self.selection)
                 if self[i][j] is 0:
-                    for v in range(1, 10):
+                    for v in range(1, len(self.selection)):
                         b = self.box[i][j]
                         if self.flag['r'][i][v] + self.flag['c'][j][v] + self.flag['b'][b][v] is 0:
-                            self.choice[i][j][v] = 1    # 1 = True
-                            self.choice[i][j][0] += 1   # counter
+                            self.choice[i][j][v] = 1  # 1 = True
+                            self.choice[i][j][0] += 1  # counter
         if show:
             print('FLAGS:', self.flag_, sep='\n')
             print('CHOICES:', self.choice_(detail=True), sep='\n')
@@ -160,8 +161,8 @@ class Sudoku:
         _flag = True
         while _flag:
             _flag = False
-            for i in range(9):
-                for j in range(9):
+            for i in range(self.size):
+                for j in range(self.size):
                     if self.choice[i][j][0] is 1:
                         _flag = True
                         v = 1
@@ -169,10 +170,10 @@ class Sudoku:
                             v += 1
                         self.set_(i, j, v, show=show)
 
-            for v in range(1, 10):
-                assessed: Matrix = [[False] * 9 for _ in range(9)]
-                for i in range(9):
-                    for j in range(9):
+            for v in range(1, len(self.selection)):
+                assessed: Matrix = [[False] * self.size for _ in range(self.size)]
+                for i in range(self.size):
+                    for j in range(self.size):
                         if not assessed[i][j] and self.choice[i][j][v]:
                             _neighbour = self.neighbour(i, j)
                             if len(_neighbour) > 1:
@@ -211,7 +212,8 @@ class Sudoku:
                 bestchoice = self.makechoice(randomly=randomly, failure=failure, show=show)
                 backup = copy.deepcopy((self.table, self.flag, self.choice))
                 guess.append((backup, *bestchoice))
-                print('> ' * (len(guess) - 1), 'guess: ', bestchoice, sep='')
+                _choice = (bestchoice[0], bestchoice[1], self.selection[bestchoice[2]])
+                print('> ' * (len(guess) - 1), 'guess: ', _choice, sep='')
                 count += 1
                 if show:
                     print()
@@ -222,8 +224,10 @@ class Sudoku:
                 raise SudokuIsIllegal
 
             else:
-                print('  ' * (len(guess) - 2) + '< ', 'wrong: ', guess[-1][1:], sep='')
                 [backup, wrongi, wrongj, wrongv] = guess[-1]
+                _choice = (wrongi, wrongj, self.selection[wrongv])
+                print('  ' * (len(guess) - 2) + '< ', 'wrong: ', _choice, sep='')
+
                 del guess[-1]
                 self.table, self.flag, self.choice = copy.deepcopy(backup)
                 self.choice[wrongi][wrongj][wrongv] = 0
@@ -235,11 +239,24 @@ class Sudoku:
                     print('CHOICES:', self.choice_(), sep='\n')
                     failure = (wrongi, wrongj)
 
+    def ismatrix(self, suspect) -> bool:
+        if len(suspect) != self.size:
+            return False
+        for sequence in suspect:
+            if len(sequence) != self.size:
+                return False
+            for point in sequence:
+                if type(point) is not int:
+                    return False
+                elif point < 0 or point > self.size:
+                    return False
+        return True
+
     def __str__(self) -> str:
         _str: str = ''
-        for i in range(9):
-            for j in range(9):
-                p = str(self[i][j])
+        for i in range(self.size):
+            for j in range(self.size):
+                p = self.selection[self[i][j]]
                 if self[i][j] is 0:
                     p = '-'
                 q = ' '
@@ -250,23 +267,23 @@ class Sudoku:
 
     def choice_(self, *, detail=False) -> str:
         _str: str = ''
-        for i in range(9):
-            for j in range(9):
+        for i in range(self.size):
+            for j in range(self.size):
                 if self.choice[i][j][0] is not 0:
-                    p = str(self.choice[i][j][0])
+                    p = '%3d' % self.choice[i][j][0]
                 else:
-                    p = '-'
-                _str += p + ' '
+                    p = '  -'
+                _str += p
             _str += '\n'
         if detail:
-            for v in range(1, 10):
+            for v in range(1, len(self.selection)):
                 _str += 'choice of %d:\n' % v
-                for i in range(9):
-                    for j in range(9):
+                for i in range(self.size):
+                    for j in range(self.size):
                         if self.choice[i][j][v] is 0:
                             p = '-'
                         elif self.choice[i][j][v] is 1:
-                            p = str(v)
+                            p = self.selection[v]
                         else:
                             p = '+'
                         _str += p + ' '
@@ -279,11 +296,11 @@ class Sudoku:
         for index in Sudoku.map:
             _str = _str + Sudoku.map[index] + ':\n'
             for sequence in self.flag[index]:
-                for v in range(1, 10):
+                for v in range(1, len(self.selection)):
                     if sequence[v] is 0:
                         p = '-'
                     elif sequence[v] is 1:
-                        p = str(v)
+                        p = self.selection[v]
                     else:
                         p = '+'
                     _str += p + ' '
@@ -300,16 +317,16 @@ class Sudoku:
                         if number > 1:
                             return False
         else:
-            for i in range(9):
-                for j in range(9):
+            for i in range(self.size):
+                for j in range(self.size):
                     if self[i][j] + self.choice[i][j][0] is 0:
                         return False
         return True
 
     @property
     def iscompleted(self) -> bool:
-        for i in range(9):
-            for j in range(9):
+        for i in range(self.size):
+            for j in range(self.size):
                 if self[i][j] is 0:
                     return False
         return True
@@ -323,44 +340,29 @@ class SudokuIsCompleted(Exception):
     pass
 
 
-def ismatrix(suspect) -> bool:
-    _flag = True
-    if len(suspect) != 9:
-        return False
-    for sequence in suspect:
-        if len(sequence) != 9:
-            return False
-        for point in sequence:
-            if type(point) is not int:
-                return False
-            elif point < 0 or point > 9:
-                return False
-    return _flag
-
-
-def fileinput(_in) -> Matrix:
-    if _in is '':
-        _in = input('fileinput: ')
+def fileinput(_in, *, size: int=0, selection: str='') -> Matrix:
+    if size is 0:
+        size = input('size: ')
     with codecs.open(_in, 'r', 'utf-8') as f:
         str_in = f.read()
-    _table = [[0] * 9 for _ in range(9)]
-    i = 0
-    j = 0
-    l = len(str_in)
-    while i < 81 and j < l:
-        while not str_in[j].isdigit():
-            j = j + 1
-        _table[i // 9][i % 9] = int(str_in[j])
+    _table = [[0] * size for _ in range(size)]
+    i, j = 0, 0
+    while i < size ** 2 and j < len(str_in):
+        while str_in[j] not in selection:
+            j += 1
+        _table[i // size][i % size] = selection.index(str_in[j])
         i += 1
         j += 1
     return _table
 
 
-def main(*, _in: str = '', _out: str = '', randomly=False, show=False):
-    _table: Matrix = fileinput(_in)
+def main(*, _in: str='', _out: str='', size: int=0, selection: str='', randomly=False, show=False):
+    if size != len(selection) - 1:
+        raise ValueError
+    _table: Matrix = fileinput(_in, size=size, selection=selection)
     fout = StringIO()
-    question = Sudoku(name='QUESTION', table=_table)
-    sudoku = Sudoku(name='ANSWER', table=_table)
+    question = Sudoku(name='QUESTION', size=size, selection=selection, table=_table)
+    sudoku = Sudoku(name='ANSWER', size=size, selection=selection, table=_table)
     print('QUESTION:', question, sep='\n', file=fout)
 
     try:
@@ -380,7 +382,9 @@ def main(*, _in: str = '', _out: str = '', randomly=False, show=False):
 
 
 if __name__ == '__main__':
-    code = 2
-    randomly = True
+    code = 6
+    size = 16
+    selection = '-0123456789ABCDEF'
+    randomly = False
     show = False
-    main(_in='sudoku.in%d.txt' % code, randomly=randomly, show=show)
+    main(_in='sudoku.in%d.txt' % code, size=size, selection=selection, randomly=randomly, show=show)
