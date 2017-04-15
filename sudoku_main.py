@@ -108,30 +108,27 @@ class Sudoku:
                             if self.choice[i][j][v]:
                                 candidate.append((i, j, v))
         if show:
-            print('Standard:', qualified)
+            print('standard:', qualified)
             print('among:',)
             site: Dict[Tuple[int, int], List[int]] = {}
             for i, j, v in candidate:
                 if (i, j) not in site:
                     site[(i, j)] = []
                 site[(i, j)].append(v)
-            for s in site:
-                print(s, ':', end=' ')
-                for _candidate in site[s]:
+            for _site in site:
+                print(_site, ':', end=' ')
+                for _candidate in site[_site]:
                     print(_candidate, end=' ')
                 print()
 
         if failure is not () and self.choice[failure[0]][failure[1]][0] > 1:
             print(self, self.choice_(), sep='\n')
             _i, _j = failure
-            _v, _n = 0, 0
+            print('failure: (%d, %d)' % (_i, _j))
+            candidate = []
             for v in range(1, 10):
-                _neighbour = self.neighbour(_i, _j, v)
-                if _n is 0 or len(_neighbour) < _n:
-                    _v, _n = v, len(_neighbour)
-            print('Failure: (%d, %d)' % (_i, _j))
-            return _i, _j, _v
-        elif randomly:
+                candidate.append((_i, _j, v))
+        if randomly:
             return random.choice(candidate)
         else:
             _i, _j, _v, _n = 9, 9, 0, 0
@@ -140,7 +137,6 @@ class Sudoku:
                 if _n is 0 or len(_neighbour) < _n:
                     _i, _j, _v, _n = i, j, v, len(_neighbour)
 
-        print('Loneliest:', _n)
         return _i, _j, _v
 
     def initialize_(self, *, show=False):
@@ -185,10 +181,10 @@ class Sudoku:
                                 self.set_(i, j, v, show=show)
 
         if show:
-            print('Simplied SODUKU:', self, sep='\n')
+            print('simplied SODUKU:', self, sep='\n')
             print('CHOICES:', self.choice_(), sep='\n')
 
-    def solve(self, *, guess: List[Tuple]=None, failure: Tuple[int, int]=(), randomly, show):
+    def solve(self, *, guess: List[Tuple]=(), failure: Tuple[int, int]=(), randomly, show):
         if not self.initialized:
             if self.islegal:
                 self.initialize_(show=show)
@@ -198,17 +194,18 @@ class Sudoku:
         self.simplfy(show=show)
 
         if self.iscompleted:
+            print('  ' * (len(guess) - 1), 'completed!', sep='')
             raise SudokuIsCompleted
 
         elif self.islegal:
             if not self.confirmed:
-                print('Confirmed:', self, sep='\n')
+                print('CONFIRMED:', self, sep='\n')
                 self.confirmed = True
             # guess
             bestchoice = self.makechoice(randomly=randomly, failure=failure, show=show)
-            if guess is None:
+            if guess is ():
                 guess = []
-            backup = copy.deepcopy(self.table), copy.deepcopy(self.flag), copy.deepcopy(self.choice)
+            backup = copy.deepcopy((self.table, self.flag, self.choice))
             guess.append((backup, *bestchoice))
             print('> ' * (len(guess) - 1), 'guess: ', bestchoice, sep='')
             if show:
@@ -216,7 +213,8 @@ class Sudoku:
             self.set_(*bestchoice, show=show)
             return self.solve(guess=guess, randomly=randomly, show=show)
 
-        elif guess is None:
+        elif guess is ():
+            print('illegal!')
             raise SudokuIsIllegal
 
         else:
@@ -224,20 +222,18 @@ class Sudoku:
             [backup, wrongi, wrongj, wrongv] = guess[-1]
             del guess[-1]
             if len(guess) is 0:
-                guess = None
-            self.table = copy.deepcopy(backup[0])
-            self.flag = copy.deepcopy(backup[1])
-            self.choice = copy.deepcopy(backup[2])
+                guess = ()
+            self.table, self.flag, self.choice = copy.deepcopy(backup)
             self.choice[wrongi][wrongj][wrongv] = 0
             self.choice[wrongi][wrongj][0] -= 1
             if show:
-                print('backup:')
+                print('BACKUP:')
                 print(self)
                 # print('FLAGS:', self.flag_, sep='\n')
                 print('CHOICES:', self.choice_(), sep='\n')
             return self.solve(guess=guess, failure=(wrongi, wrongj), randomly=randomly, show=show)
 
-    def __str__(self):
+    def __str__(self) -> str:
         _str: str = ''
         for i in range(9):
             for j in range(9):
@@ -245,9 +241,34 @@ class Sudoku:
                 if self[i][j] is 0:
                     p = '-'
                 q = ' '
-                _str = _str + p + q
+                _str += p + q
             _str += '\n'
         # _str = _str[:-1]
+        return _str
+    
+    def choice_(self, *, detail=False) -> str:
+        _str: str = ''
+        for i in range(9):
+            for j in range(9):
+                if self.choice[i][j][0] is not 0:
+                    p = str(self.choice[i][j][0])
+                else:
+                    p = '-'
+                _str += p + ' '
+            _str += '\n'
+        if detail:
+            for v in range(1, 10):
+                _str += 'choice of %d:\n' % v
+                for i in range(9):
+                    for j in range(9):
+                        if self.choice[i][j][v] is 0:
+                            p = '-'
+                        elif self.choice[i][j][v] is 1:
+                            p = str(v)
+                        else:
+                            p = '+'
+                        _str += p + ' '
+                    _str += '\n'
         return _str
 
     @property
@@ -263,34 +284,9 @@ class Sudoku:
                         p = str(v)
                     else:
                         p = '+'
-                    _str = _str + p + ' '
+                    _str += p + ' '
                 _str += '\n'
         # _str = _str[:-1]
-        return _str
-
-    def choice_(self, *, detail=False) -> str:
-        _str: str = ''
-        for i in range(9):
-            for j in range(9):
-                if self.choice[i][j][0] is not 0:
-                    p = str(self.choice[i][j][0])
-                else:
-                    p = '-'
-                _str = _str + p + ' '
-            _str += '\n'
-        if detail:
-            for v in range(1, 10):
-                _str += 'choice of %d:\n' % v
-                for i in range(9):
-                    for j in range(9):
-                        if self.choice[i][j][v] is 0:
-                            p = '-'
-                        elif self.choice[i][j][v] is 1:
-                            p = str(v)
-                        else:
-                            p = '+'
-                        _str = _str + p + ' '
-                    _str += '\n'
         return _str
 
     @property
@@ -327,17 +323,16 @@ class SudokuIsCompleted(Exception):
 
 def ismatrix(suspect) -> bool:
     _flag = True
-    if len(suspect) == 9:
-        for sequence in suspect:
-            if len(sequence) != 9:
-                _flag = False
-            for point in sequence:
-                if type(point) is not int:
-                    _flag = False
-                elif point < 0 or point > 9:
-                    _flag = False
-    else:
-        _flag = False
+    if len(suspect) != 9:
+        return False
+    for sequence in suspect:
+        if len(sequence) != 9:
+            return False
+        for point in sequence:
+            if type(point) is not int:
+                return False
+            elif point < 0 or point > 9:
+                return False
     return _flag
 
 
@@ -383,7 +378,7 @@ def main(*, _in: str = '', _out: str = '', randomly=False, show=False):
 
 
 if __name__ == '__main__':
-    code = 5
-    randomly = True
-    show = True
+    code = 4
+    randomly = False
+    show = False
     main(_in='sudoku.in%d.txt' % code, randomly=randomly, show=show)
