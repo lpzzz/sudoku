@@ -64,9 +64,8 @@ class Sudoku:
             self[i][j] = v
             if self.initialized:
                 for _i, _j in self.neighbour(i, j, v):
-                    self.choice[_i][_j][0] -= 1
-                    self.choice[_i][_j][v] = 0
-                self.choice[i][j] = [0] * self.num
+                    self.choice[_i][_j].remove(v)
+                self.choice[i][j] = set()
         if show:
             print('(%s, %s) = %s' % (i, j, self.selection[v]))
             print(self)
@@ -75,14 +74,14 @@ class Sudoku:
         _neighbour: Points = set()
         row, col, box = -1, -1, -1
         for _i in range(self.size):
-            if area is 'choice' and self.choice[_i][j][v]:
+            if area is 'choice' and v in self.choice[_i][j]:
                 _neighbour.add((_i, j))
                 row += 1
             elif area is 'table' and self[_i][j] is v:
                 _neighbour.add((_i, j))
 
         for _j in range(self.size):
-            if area is 'choice' and self.choice[i][_j][v]:
+            if area is 'choice' and v in self.choice[i][_j]:
                 _neighbour.add((i, _j))
                 col += 1
             elif area is 'table' and self[i][_j] is v:
@@ -91,7 +90,7 @@ class Sudoku:
         b = self.box[i][j]
         for _i, _j in self.coor:
             if self.box[_i][_j] is b:
-                if area is 'choice' and self.choice[_i][_j][v]:
+                if area is 'choice' and v in self.choice[_i][_j]:
                     _neighbour.add((_i, _j))
                     box += 1
                 elif area is 'table' and self[_i][_j] is v:
@@ -108,9 +107,9 @@ class Sudoku:
         while len(candidate) is 0:
             qualified += 1
             for i, j in self.coor:
-                if self.choice[i][j][0] is qualified:
+                if len(self.choice[i][j]) is qualified:
                     for v in range(1, self.num):
-                        if self.choice[i][j][v]:
+                        if v in self.choice[i][j]:
                             candidate.append((i, j, v))
         if show:
             print('standard:', qualified)
@@ -141,16 +140,17 @@ class Sudoku:
     def initialize_(self, *, show=False):
         self.choice = [[None] * self.size for _ in range(self.size)]
         for i, j in self.coor:
-            self.choice[i][j] = [0] + [1] * (self.num - 1)
+            self.choice[i][j] = set()
+            for v in range(1, self.num):
+                self.choice[i][j].add(v)
         for i, j in self.coor:
             if self[i][j] is not 0:
                 v = self[i][j]
-                self.choice[i][j] = [0] * self.num
+                self.choice[i][j] = set()
                 _neighbour = self.neighbour(i, j, 0, area='table')
                 for _i, _j in _neighbour:
-                    self.choice[_i][_j][v] = 0
-        for i, j in self.coor:
-            self.choice[i][j][0] = sum(self.choice[i][j][1:])
+                    if v in self.choice[_i][_j]:
+                        self.choice[_i][_j].remove(v)
         
         if show:
             print('CHOICES:', self.choice_(detail=True), sep='\n')
@@ -160,16 +160,14 @@ class Sudoku:
         while _flag:
             _flag = False
             for i, j in self.coor:
-                if self.choice[i][j][0] is 1:
+                if len(self.choice[i][j]) is 1:
                     _flag = True
-                    v = 1
-                    while self.choice[i][j][v] is 0:
-                        v += 1
+                    v = list(self.choice[i][j])[0]
                     self.set_(i, j, v, show=show)
 
             for v in range(1, self.num):
                 for i, j in self.coor:
-                    if self.choice[i][j][v]:
+                    if v in self.choice[i][j]:
                         _neighbour, row, col, box = self.neighbour(i, j, v, stats=True)
                         if row * col * box is 0:
                             _flag = True
@@ -221,8 +219,7 @@ class Sudoku:
 
                 del guess[-1]
                 self.table, self.choice = copy.deepcopy(backup)
-                self.choice[wrongi][wrongj][wrongv] = 0
-                self.choice[wrongi][wrongj][0] -= 1
+                self.choice[wrongi][wrongj].remove(wrongv)
                 if show:
                     print('BACKUP:')
                     print(self)
@@ -259,8 +256,8 @@ class Sudoku:
         _str: str = ''
         for i in range(self.size):
             for j in range(self.size):
-                if self.choice[i][j][0] is not 0:
-                    p = '%-2d' % self.choice[i][j][0]
+                if len(self.choice[i][j]) is not 0:
+                    p = '%-2d' % len(self.choice[i][j])
                 else:
                     p = '- '
                 _str += p
@@ -270,12 +267,10 @@ class Sudoku:
                 _str += 'choice of %d:\n' % v
                 for i in range(self.size):
                     for j in range(self.size):
-                        if self.choice[i][j][v] is 0:
+                        if v not in self.choice[i][j]:
                             p = '-'
-                        elif self.choice[i][j][v] is 1:
-                            p = self.selection[v]
                         else:
-                            p = '+'
+                            p = self.selection[v]
                         _str += p + ' '
                     _str += '\n'
         return _str
@@ -295,7 +290,7 @@ class Sudoku:
                     return False
         else:
             for i, j in self.coor:
-                if self[i][j] + self.choice[i][j][0] is 0:
+                if self[i][j] is 0 and len(self.choice[i][j]) is 0:
                     return False
         return True
 
