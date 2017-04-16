@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 # __author__ = 'L'
 
-from typing import List, Dict, Tuple, Set, Any
+from typing import List, Tuple, Set, Any
 from io import StringIO
 import copy
 import codecs
@@ -18,18 +18,21 @@ class Sudoku:
         self.name = name
         self.size = size
         self.selection = selection
-        self.num = len(self.selection)
+        self.n = len(self.selection)
         self.coor: List[Tuple[int, int]] = []
         for i, j in itertools.product(range(self.size), repeat=2):
             self.coor.append((i, j))
         self.table: Matrix = [[0] * self.size for _ in range(self.size)]
         self.box: Matrix = [[0] * self.size for _ in range(self.size)]
-        s = int(self.size ** 0.5)
+        self.mask: List[bool] = [True] * self.n
+        self.map: Matrix = [[] for _ in range(self.size)]
+        _sqrt = int(self.size ** 0.5)
         for i, j in self.coor:
-            self.box[i][j] = i // s * s + j // s
+            self.box[i][j] = i // _sqrt * _sqrt + j // _sqrt
         self.choice: Matrix = ()
-        self.initialized = False
-        self.confirmed = False
+        self.initialized: bool = False
+        self.confirmed: bool = False
+        self.show: bool = False
 
         if table is not ():
             if self.ismatrix(table):
@@ -38,7 +41,7 @@ class Sudoku:
             else:
                 for line in table:
                     print(line)
-                raise ValueError
+                raise ValueError('\n\n\'table\' is not a \'Matrix\'')
 
         if box is not ():
             if self.ismatrix(box):
@@ -46,7 +49,19 @@ class Sudoku:
             else:
                 for line in box:
                     print(line)
-                raise ValueError
+                raise ValueError('\n\n\'box\' is not a \'Matrix\'')
+        else:
+            flag = True
+            for i in range(_sqrt):
+                _flag = flag
+                for j in range(_sqrt):
+                    b = self.box[i * _sqrt][j * _sqrt]
+                    self.mask[b] = _flag
+                    _flag = not _flag
+                flag = not flag
+        for i, j in self.coor:
+            b = self.box[i][j]
+            self.map[b].append((i, j))
 
     def __getitem__(self, sequence) -> List:
         return self.table[sequence]
@@ -54,177 +69,208 @@ class Sudoku:
     def __setitem__(self, sequence, value):
         raise IndexError
 
-    def set_(self, i: int, j: int, v: int, *, show=False):
+    def set_(self, i: int, j: int, v: int):
         if v is 0:
             v = self[i][j]
             if v is not 0:
                 self[i][j] = 0
-                self.initialize_(show=show)
+                self.initialize_()
         else:
             self[i][j] = v
             if self.initialized:
                 for _i, _j in self.neighbour(i, j, v):
                     self.choice[_i][_j].remove(v)
                 self.choice[i][j] = set()
-        if show:
-            print('(%s, %s) = %s' % (i, j, self.selection[v]))
-            print(self)
+        if self.initialized:
+            if not self.islegal:
+                raise SudokuIsIllegal
 
-    def neighbour(self, i: int, j: int, v: int, *, area='choice', stats=False):
+    def neighbour(self, i: int, j: int, v: int=0, *, area='choice', stats=False):
         _neighbour: Points = set()
         row, col, box = -1, -1, -1
-        for _i in range(self.size):
-            if area is 'choice' and v in self.choice[_i][j]:
-                _neighbour.add((_i, j))
-                row += 1
-            elif area is 'table' and self[_i][j] is v:
-                _neighbour.add((_i, j))
+        if area is 'choice':
+            for _i in range(self.size):
+                if v in self.choice[_i][j]:
+                    _neighbour.add((_i, j))
+                    row += 1
 
-        for _j in range(self.size):
-            if area is 'choice' and v in self.choice[i][_j]:
-                _neighbour.add((i, _j))
-                col += 1
-            elif area is 'table' and self[i][_j] is v:
-                _neighbour.add((i, _j))
+            for _j in range(self.size):
+                if v in self.choice[i][_j]:
+                    _neighbour.add((i, _j))
+                    col += 1
 
-        b = self.box[i][j]
-        for _i, _j in self.coor:
-            if self.box[_i][_j] is b:
-                if area is 'choice' and v in self.choice[_i][_j]:
+            b = self.box[i][j]
+            for _i, _j in self.map[b]:
+                if v in self.choice[_i][_j]:
                     _neighbour.add((_i, _j))
                     box += 1
-                elif area is 'table' and self[_i][_j] is v:
+
+        elif area is 'table':
+            for _i in range(self.size):
+                if self[_i][j] is v:
+                    _neighbour.add((_i, j))
+            for _j in range(self.size):
+                if self[i][_j] is v:
+                    _neighbour.add((i, _j))
+            b = self.box[i][j]
+            for _i, _j in self.map[b]:
+                if self[_i][_j] is v:
                     _neighbour.add((_i, _j))
+
+        else:
+            raise ValueError('\n\nArgument \'area\' should be \'choice\' or \'table\'')
 
         if stats:
             return _neighbour, row, col, box
         else:
             return _neighbour
 
-    def makechoice(self, *, randomly=False, show=False):
-        candidate: List[Tuple[int, int, int]] = []
+    def makechoice(self, *, randomly=False):
+        candidate: List[Tuple[int, int]] = []
         qualified = 1
         while len(candidate) is 0:
             qualified += 1
             for i, j in self.coor:
                 if len(self.choice[i][j]) is qualified:
-                    for v in range(1, self.num):
-                        if v in self.choice[i][j]:
-                            candidate.append((i, j, v))
-        if show:
+                    candidate.append((i, j))
+        if self.show:
             print('standard:', qualified)
-            print('among:', )
-            site: Dict[Tuple[int, int], List[int]] = {}
-            for i, j, v in candidate:
-                if (i, j) not in site:
-                    site[(i, j)] = []
-                site[(i, j)].append(v)
-            for _site in site:
-                print(_site, ':', end=' ')
-                for _v in site[_site]:
-                    print(self.selection[_v], end=' ')
-                print()
+            print('among:')
+            q = 0
+            for i, j in candidate:
+                q += 1
+                print(f'{(i, j)} = ', end='')
+                for v in self.choice[i][j]:
+                    print(f'\'{self.selection[v]}\'', end=' ')
+                print('    ', end='')
+                if q % 5 is 0:
+                    print()
+            print()
 
         if randomly:
-            return random.choice(candidate)
+            _i, _j = random.choice(candidate)
+            _v = random.choice(tuple(self.choice[_i][_j]))
+            return _i, _j, _v
         else:
-            _i, _j, _v, _n = self.size, self.size, 0, 0
-            for i, j, v in candidate:
-                _neighbour = self.neighbour(i, j, v)
-                if _n is 0 or len(_neighbour) > _n:
-                    _i, _j, _v, _n = i, j, v, len(_neighbour)
-                elif len(_neighbour) == _n and random.choice((False, True)):
-                    _i, _j, _v = i, j, v
+            _i, _j, _v, _n, _variety = self.size, self.size, 0, 0, 0
+            for i, j in candidate:
+                population: List[int, int] = [0] * self.n
+                for v in self.choice[i][j]:
+                    population[v] = len(self.neighbour(i, j, v))
+                    population[0] += population[v] ** 2
+                n = max(population[1:])
+                v = random.choice([v for v in self.choice[i][j] if population[v] is n])
+                variety = population[0] - n ** 2
+                _flag = False
+                if n > _n:
+                    _flag = True
+                elif n == _n:
+                    if variety > _variety:
+                        _flag = True
+                    elif variety == _variety:
+                        _flag = random.choice((False, True))
+                if _flag:
+                    _i, _j, _v, _n, _variety = i, j, v, n, variety
+            if self.show:
+                print(f'choose: {_i, _j} \'{self.selection[_v]}\' {_n, _variety}')
         return _i, _j, _v
 
-    def initialize_(self, *, show=False):
+    def initialize_(self):
         self.choice = [[None] * self.size for _ in range(self.size)]
         for i, j in self.coor:
             self.choice[i][j] = set()
-            for v in range(1, self.num):
+            for v in range(1, self.n):
                 self.choice[i][j].add(v)
         for i, j in self.coor:
             if self[i][j] is not 0:
                 v = self[i][j]
                 self.choice[i][j] = set()
-                _neighbour = self.neighbour(i, j, 0, area='table')
+                _neighbour = self.neighbour(i, j, area='table')
                 for _i, _j in _neighbour:
                     if v in self.choice[_i][_j]:
                         self.choice[_i][_j].remove(v)
-        
-        if show:
-            print('CHOICES:', self.choice_(detail=True), sep='\n')
 
-    def simplfy(self, *, show=True):
+        if self.show:
+            print('CHOICES:', self.choice_(), sep='\n')
+
+    def simplfy(self):
         _flag = True
+        q = 0
         while _flag:
             _flag = False
             for i, j in self.coor:
                 if len(self.choice[i][j]) is 1:
-                    _flag = True
                     v = list(self.choice[i][j])[0]
-                    self.set_(i, j, v, show=show)
-
-            for v in range(1, self.num):
+                    if self.show:
+                        q += 1
+                        print(f'{(i, j)} = \'{self.selection[v]}\'', end='    ')
+                        if q % 5 is 0:
+                            print()
+                    self.set_(i, j, v)
+                    _flag = True
+            for v in range(1, self.n):
                 for i, j in self.coor:
                     if v in self.choice[i][j]:
                         _neighbour, row, col, box = self.neighbour(i, j, v, stats=True)
                         if row * col * box is 0:
+                            if self.show:
+                                q += 1
+                                print(f'{(i, j)} = \'{self.selection[v]}\'', end='    ')
+                                if q % 5 is 0:
+                                    print()
+                            self.set_(i, j, v)
                             _flag = True
-                            self.set_(i, j, v, show=show)
-            
-        if show:
-            print('simplied SODUKU:', self, sep='\n')
-            print('CHOICES:', self.choice_(), sep='\n')
+        if self.show:
+            print('\nsimplied SODUKU:', self, sep='\n')
+            print('CHOICES:', self.choice_(0), sep='\n')
 
-    def solve(self, *, randomly, show):
+    def solve(self, *, randomly, show=False):
         guess: List[Tuple] = []
         loop: int = 0
+        self.show = show
+        if self.islegal:
+            self.initialize_()
+        else:
+            raise SudokuIsIllegal
+        self.initialized = True
         while True:
-            if not self.initialized:
-                if self.islegal:
-                    self.initialize_(show=show)
+            try:
+                self.simplfy()
+                
+                if self.iscompleted:
+                    print('  ' * (len(guess) - 1) + f'complete: {loop}')
+                    raise SudokuIsCompleted
+    
                 else:
+                    if not self.confirmed:
+                        print('CONFIRMED:', self, sep='\n')
+                        self.confirmed = True
+                    bestchoice = self.makechoice(randomly=randomly)
+                    backup = copy.deepcopy((self.table, self.choice))
+                    guess.append((backup, *bestchoice))
+                    _choice = (bestchoice[0], bestchoice[1], self.selection[bestchoice[2]])
+                    loop += 1
+                    print(f'> ' * (len(guess) - 1) + f'guess: {_choice}')
+                    if self.show:
+                        print()
+                    self.set_(*bestchoice)
+    
+            except SudokuIsIllegal:
+                if len(guess) is 0:
                     raise SudokuIsIllegal
-                self.initialized = True
-            self.simplfy(show=show)
-
-            if self.iscompleted:
-                print('  ' * (len(guess) - 1), 'completed: ', loop, sep='')
-                raise SudokuIsCompleted
-
-            elif self.islegal:
-                if not self.confirmed:
-                    print('CONFIRMED:', self, sep='\n')
-                    self.confirmed = True
-                # guess
-                bestchoice = self.makechoice(randomly=randomly, show=show)
-                backup = copy.deepcopy((self.table, self.choice))
-                guess.append((backup, *bestchoice))
-                _choice = (bestchoice[0], bestchoice[1], self.selection[bestchoice[2]])
-                print('> ' * (len(guess) - 1), 'guess: ', _choice, sep='')
-                loop += 1
-                if show:
-                    print()
-                self.set_(*bestchoice, show=show)
-
-            elif len(guess) is 0:
-                print('illegal!')
-                raise SudokuIsIllegal
-
-            else:
-                [backup, wrongi, wrongj, wrongv] = guess[-1]
-                _choice = (wrongi, wrongj, self.selection[wrongv])
-                print('  ' * (len(guess) - 2) + '< ', 'wrong: ', _choice, sep='')
-
-                del guess[-1]
-                self.table, self.choice = copy.deepcopy(backup)
-                self.choice[wrongi][wrongj].remove(wrongv)
-                if show:
-                    print('BACKUP:')
-                    print(self)
-                    # print('FLAGS:', self.flag_, sep='\n')
-                    print('CHOICES:', self.choice_(), sep='\n')
+    
+                else:
+                    [backup, wrongi, wrongj, wrongv] = guess[-1]
+                    _choice = (wrongi, wrongj, self.selection[wrongv])
+                    print('  ' * (len(guess) - 2) + f'< wrong: {_choice}')
+                    del guess[-1]
+                    self.table, self.choice = copy.deepcopy(backup)
+                    self.choice[wrongi][wrongj].remove(wrongv)
+                    if self.show:
+                        print('BACKUP:')
+                        print(self)
+                        # print('FLAGS:', self.flag_, sep='\n')
+                        print('CHOICES:', self.choice_(0), sep='\n')
 
     def ismatrix(self, suspect) -> bool:
         if len(suspect) != self.size:
@@ -243,44 +289,61 @@ class Sudoku:
         _str: str = ''
         for i in range(self.size):
             for j in range(self.size):
-                p = self.selection[self[i][j]]
-                if self[i][j] is 0:
+                if self[i][j] is not 0:
+                    p = self.selection[self[i][j]]
+                elif self.mask[self.box[i][j]]:
+                    p = ' '
+                else:
                     p = '-'
-                q = ' '
-                _str += p + q
+                _str += p + ' '
             _str += '\n'
         # _str = _str[:-1]
         return _str
 
-    def choice_(self, *, detail=False) -> str:
+    def choice_(self, *value) -> str:
         _str: str = ''
+        if value is ():
+            value = range(self.n)
+        sub_str: str = ''
+        _flag = False
         for i in range(self.size):
             for j in range(self.size):
                 if len(self.choice[i][j]) is not 0:
-                    p = '%-2d' % len(self.choice[i][j])
+                    p = f'{len(self.choice[i][j]):<2}'
+                    _flag = True
+                elif self.mask[self.box[i][j]]:
+                    p = '  '
                 else:
                     p = '- '
-                _str += p
-            _str += '\n'
-        if detail:
-            for v in range(1, self.num):
-                _str += 'choice of %d:\n' % v
+                sub_str += p
+            sub_str += '\n'
+        if not _flag:
+            _str += '    None\n'
+        else:
+            if 0 in value:
+                _str += sub_str
+                value = list(value)
+                value.pop(0)
+            for v in value:
+                sub_str: str = ''
+                _flag = False
+                sub_str += f'choice of {self.selection[v]}:\n'
                 for i in range(self.size):
                     for j in range(self.size):
-                        if v not in self.choice[i][j]:
-                            p = '-'
-                        else:
+                        if self[i][j] is v:
                             p = self.selection[v]
-                        _str += p + ' '
-                    _str += '\n'
+                        elif v in self.choice[i][j]:
+                            p = '#'
+                            _flag = True
+                        elif self.mask[self.box[i][j]]:
+                            p = ' '
+                        else:
+                            p = '-'
+                        sub_str += p + ' '
+                    sub_str += '\n'
+                if _flag:
+                    _str += sub_str
         return _str
-
-    @property
-    def count(self) -> List[int]:
-        _count = [0] * self.num
-        for i, j in self.coor:
-            _count[self[i][j]] += 1
-        return _count
 
     @property
     def islegal(self) -> bool:
@@ -289,9 +352,26 @@ class Sudoku:
                 if self[i][j] is not 0 and len(self.neighbour(i, j, self[i][j], area='table')) > 1:
                     return False
         else:
-            for i, j in self.coor:
-                if self[i][j] is 0 and len(self.choice[i][j]) is 0:
-                    return False
+            for index in range(self.size):
+                for v in range(1, self.n):
+                    try:
+                        i = 0
+                        while v not in self.choice[i][index] and self[i][index] is not v:
+                            i += 1
+                        j = 0
+                        while v not in self.choice[index][j] and self[index][j] is not v:
+                            j += 1
+                        b = 0
+                        i, j = self.map[index][b]
+                        while v not in self.choice[i][j] and self[i][j] is not v:
+                            b += 1
+                            i, j = self.map[index][b]
+                    except IndexError:
+                        if self.show:
+                            print('\nILLEGAL:', self, sep='\n')
+                            print(f'index = {index}')
+                            print(self.choice_(v))
+                        return False
         return True
 
     @property
@@ -356,7 +436,7 @@ if __name__ == '__main__':
     tuple_9 = (9, '0123456789')
     tuple_16 = (16, '-0123456789ABCDEF')
     size, selection = tuple_9
-    code = 2
+    code = 5
     randomly = False
-    show = True
-    main(_in='sudoku.in%d.txt' % code, size=size, selection=selection, randomly=randomly, show=show, )
+    show = False
+    main(_in=f'sudoku.in{code}.txt', size=size, selection=selection, randomly=randomly, show=show, )
