@@ -15,5 +15,5 @@ D----E9B--1-F--5
 8--D--6F7--1C---
 -0--A----F-3----
 
-selection = '-0123456789ABCDEF'
 size = 16
+selection = '-0123456789ABCDEF'
