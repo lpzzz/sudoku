@@ -1,15 +1,14 @@
 # -*- coding:utf-8 -*-
 # __author__ = 'L'
 
-from typing import List, Tuple, Set, Any
+from typing import List, Tuple, Set, Any, Union
 from io import StringIO
 import copy
 import codecs
 import random
-import itertools
 
 Matrix = List[List[Any]]
-Points = Set[Tuple[int, int]]
+Points = Union[Set[Tuple[int, int]], List[Tuple[int, int]]]
 
 
 class Sudoku:
@@ -19,9 +18,7 @@ class Sudoku:
         self.size = size
         self.selection = selection
         self.n = len(self.selection)
-        self.coor: List[Tuple[int, int]] = []
-        for i, j in itertools.product(range(self.size), repeat=2):
-            self.coor.append((i, j))
+        self.coor: Points = [(i, j) for i in range(self.size) for j in range(self.size)]
         self.table: Matrix = [[0] * self.size for _ in range(self.size)]
         self.box: Matrix = [[0] * self.size for _ in range(self.size)]
         self.mask: List[bool] = [True] * self.n
@@ -126,7 +123,7 @@ class Sudoku:
             return _neighbour
 
     def makechoice(self, *, randomly=False):
-        candidate: List[Tuple[int, int]] = []
+        candidate: Points = []
         qualified = 1
         while len(candidate) is 0:
             qualified += 1
@@ -176,9 +173,9 @@ class Sudoku:
         return _i, _j, _v
 
     def initialize_(self):
-        self.choice = [[None] * self.size for _ in range(self.size)]
+        self.choice = [[] for _ in range(self.size)]
         for i, j in self.coor:
-            self.choice[i][j] = set()
+            self.choice[i].append(set())
             for v in range(1, self.n):
                 self.choice[i][j].add(v)
         for i, j in self.coor:
@@ -436,7 +433,7 @@ if __name__ == '__main__':
     tuple_9 = (9, '0123456789')
     tuple_16 = (16, '-0123456789ABCDEF')
     size, selection = tuple_9
-    code = 5
+    code = 2
     randomly = False
     show = False
     main(_in=f'sudoku.in{code}.txt', size=size, selection=selection, randomly=randomly, show=show, )
