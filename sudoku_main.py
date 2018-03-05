@@ -18,7 +18,7 @@ class Sudoku:
         self.size = size
         self.selection = selection
         self.n = len(self.selection)
-        self.coor: Points = [(i, j) for i in range(self.size) for j in range(self.size)]
+        self.coor = [(i, j) for i in range(self.size) for j in range(self.size)]
         self.table: Matrix = [[0] * self.size for _ in range(self.size)]
         self.box: Matrix = [[0] * self.size for _ in range(self.size)]
         self.mask: List[bool] = [True] * self.n

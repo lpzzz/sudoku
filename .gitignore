@@ -146,6 +146,7 @@ sql/
 ClientBin/
 [Ss]tyle[Cc]op.*
 ~$*
+*.rar
 *~
 *.dbmdl
 *.[Pp]ublish.xml
